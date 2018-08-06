@@ -1,0 +1,118 @@
+---
+title: |
+  | <br><br><br><br>STOPPD cortical thickness analysis
+  | (left hemisphere only)
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+  html_document:
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+---
+
+```{r set_up, include = FALSE}
+
+#load libraries
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(growthmodels)
+library(reshape2)
+library(ggplot2)
+
+#bring in data (from Navona-generated CSV in preparation for meeting with Jason Lerch)
+df <- read.csv('../generated_csvs/STOPPD_errorCases_2018-02-09.csv')
+
+#make a difference score 
+df$LDifference <- df$LThickness.02 - df$LThickness.01
+
+#make a df with only RCT completers
+df_rct <- df[(df$category == "RCT"),]
+df_rct <- df_rct[!(df_rct$STUDYID == "210030"),] #take out participant 210030
+
+#restructure data
+mdf <- df %>%
+  gather(thick_oldcolname, thickness, LThickness.01, LThickness.02) %>%
+  mutate(model_days = if_else(thick_oldcolname == "LThickness.01", 1, dateDiff))
+
+```
+
+```{r data_review, include= FALSE}
+
+#make sure relationship is linear
+plot_linear <- scatter.smooth(x=df_rct$LThickness.01, y=df_rct$LThickness.02) 
+
+#check shape
+par(mfrow=c(1, 2))
+plot_01 <- boxplot(df_rct$LThickness.01, main = "timepoint 1") 
+plot_02 <- boxplot(df_rct$LThickness.02, main = "timepoint 2") 
+
+#check density, i.e., if close to normality
+par(mfrow=c(1, 2))
+plot(density(df_rct$LThickness.01), main = "timepoint 1") 
+plot(density(df_rct$LThickness.02), main = "timepoint 2") 
+
+#check correlation
+cor(df_rct$LThickness.01, df_rct$LThickness.02) 
+
+```
+
+## RCT only
+
+```{r}
+
+#boxplot of difference in thickness (y axis) by randomization group (x axis)
+plot <- ggplot(df_rct, aes(x= randomization, y = LDifference)) + geom_boxplot() + geom_jitter() 
+plot
+
+#run linear model without covariates
+fit_rct <- lm(LDifference ~ randomization + (1|STUDYID), data= df_rct)
+print(fit_rct)
+summary(fit_rct)
+
+#run linear model with covariates of sex and age
+fit_rct <- lm(LDifference ~ randomization + Sex + Age + (1|STUDYID), data= df_rct)
+print(fit_rct)
+summary(fit_rct)
+
+```
+
+## RCT & Relapse (with time as factor)
+
+```{r, include = FALSE}
+
+#plot all data, including outlier
+mdf %>%
+  ggplot(aes(x=model_days, y=thickness, colour=randomization)) + 
+  geom_point() + 
+  geom_line(aes(group=STUDYID), alpha = 0.5) + 
+  geom_smooth(method="lm", formula=y~poly(x,1)) +
+  theme_minimal() 
+
+#run mixed linear model, with covariates
+fit_all <- lmer(thickness ~ randomization*model_days + Sex + Age + (1|STUDYID), data= mdf)
+summary(fit_all)
+
+```
+
+```{r}
+
+#do same analysis as above with 210030 removed
+mdf_no210030 <- mdf[!(mdf$STUDYID == "210030"),]
+
+#plot data excluding outlier
+mdf_no210030 %>%
+  ggplot(aes(x=model_days, y=thickness, colour=randomization)) + 
+  geom_point() + 
+  geom_line(aes(group=STUDYID), alpha = 0.5) + 
+  geom_smooth(method="lm", formula=y~poly(x,1)) +
+  theme_minimal() 
+
+#run mixed linear model, with covariates, as above
+fit_all_no210030 <- lmer(thickness ~ randomization*model_days + Sex + Age + (1|STUDYID), data= mdf_no210030)
+summary(fit_all_no210030)
+
+```
+

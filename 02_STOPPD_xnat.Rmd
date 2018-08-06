@@ -1,0 +1,85 @@
+---
+title: "STOPPD_xnat"
+author: "Navona"
+date: "January 18, 2018"
+output: html_document
+---
+
+#This script cleans up the naming of STOPPD scans as they exist in XNAT
+
+```{r setup}
+library('stringi')
+library('stringr')
+library('plyr')
+library('tidyr')
+```
+
+```{r import_data}
+
+#import spreadsheets (exported from XNAT)
+xnat_camh <- read.csv('../data/xnat_cmh_2018-01-25.csv')
+xnat_nki <- read.csv('../data/xnat_nki_2018-01-25.csv')
+xnat_pitt <- read.csv('../data/xnat_pmc_2018-01-25.csv')
+xnat_umass <- read.csv('../data/xnat_umas_2018-01-25.csv')
+terminal <- read.csv('../generated_csvs/terminal_clean_2018-01-25.csv')
+
+#clean up xnat data
+xnat_dates <- Reduce(function(x, y) merge(x, y, all=TRUE), list(xnat_camh, xnat_nki, xnat_pitt, xnat_umass))
+xnat_dates <- xnat_dates[c('MR.ID', 'Date') ]
+rm (xnat_camh, xnat_nki, xnat_pitt, xnat_umass)
+
+```
+
+```{r data_cleaning}
+
+#fix incorrect scan IDs
+#xnat_dates$MR.ID <- as.character(xnat_dates$MR.ID)
+#xnat_dates$MR.ID[xnat_dates$MR.ID == 'STOPPD_MAS_260019_0101'] <-  'STOPPD_MAS_260019_01_01'  #fixed
+#xnat_dates$MR.ID[xnat_dates$MR.ID == 'STOPPD_MAS_R260019_0101'] <- 'STOPPD_MAS_R260019_01_01' #fixed
+#xnat_dates$MR.ID[xnat_dates$MR.ID == 'STOPPD_CMH_420008_01_01'] <- 'STOPPD_CMH_410008_01_01'  #fixed
+#xnat_dates$MR.ID[xnat_dates$MR.ID == 'STOPPD_CMH_420008_02_00'] <- 'STOPPD_CMH_410008_02_00'  #fixed
+#xnat_dates$MR.ID[xnat_dates$MR.ID == 'STOPPD_CMH_420008_02_01'] <- 'STOPPD_CMH_410008_02_01'  #fixed
+#xnat_dates$MR.ID[xnat_dates$MR.ID == 'STOPPD_NKI_1110022_01_01'] <- 'STOPPD_NKI_110022_01_01' #fixed
+
+#remove all CAMH scans with '00' as timepoint (this is a consequence of creative naming to account for MRS scans)
+xnat_dates$timepoint <- str_sub(xnat_dates$MR.ID, start= -2)
+xnat_dates <- xnat_dates[-grep('00', xnat_dates$timepoint),]
+
+#there are 3 scans with '02' as timepoint - but these are all on the same day as '01', so can remove those records
+#xnat_dates <- xnat_dates[-grep('02', xnat_dates$timepoint),] #fixed
+
+#cut out timepoint info from subject ID string - now meaningless - and remove timepoint column
+xnat_dates$MR.ID  <- str_sub(xnat_dates$MR.ID, 1, -4)
+xnat_dates <- xnat_dates[, -grep('timepoint', colnames(xnat_dates))]
+
+#cut out study and site info from subject ID string - not needed
+xnat_dates$MR.ID <- substring(xnat_dates$MR.ID, 12)
+
+#make a new column for session component of ID
+xnat_dates$session <- str_sub(xnat_dates$MR.ID, -2)
+table(xnat_dates$session)
+
+#cut out session from subject ID string - not needed
+xnat_dates$MR.ID <- str_sub(xnat_dates$MR.ID, 1, -4)
+
+#make a new column that captures alphabetic component of ID ('R')
+xnat_dates$contains_R <- grepl('R', xnat_dates$MR.ID, fixed=TRUE) 
+
+#cut out the 'R' in some participant IDs (indicates repeat for controls)
+xnat_dates$MR.ID <- gsub("[R]", "", xnat_dates$MR.ID)
+
+#make a variable that combines unique ID and session number
+xnat_dates$id_session <- paste(xnat_dates$MR.ID, '_', xnat_dates$session, sep='')
+
+#check for consistency between file system and XNAT - a few discrepancies in files
+X <- terminal$id_session %in% xnat_dates$id_session #all same
+Y <- xnat_dates$id_session %in% terminal$id_session 
+  which(Y == FALSE)
+  #terminal$id_session[45] #problem is with 110008, known issue #fixed
+  #terminal$id_session[46] #problem is with 110008, known issue #being fixed
+  
+#write csv
+write.csv(xnat_dates, '../generated_csvs/xnat_clean_2018-01-25.csv', row.names=FALSE)
+
+```
+
