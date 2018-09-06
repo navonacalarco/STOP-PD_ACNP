@@ -1,0 +1,40 @@
+---
+title: "STOPPD participant list"
+output: html_notebook
+---
+
+This script creates a dataframe that includes just those participants that completed both a first and second scan (and for those participants, also includes information about a possible third scan).
+
+```{r setup}
+
+#library('stringi')
+library('plyr')
+#library('tidyr')
+#library('stringr')
+
+log <- read.csv('../generated_csvs/STOPPD_masterDF_2018-01-25.csv') #clean spreadsheet created by nc
+
+```
+
+```{r}
+
+#make smaller df
+df <- log[, c('STUDYID', 'randomization', 'first_timepoint', 'first_complete', 'second_timepoint', 'second_complete', 'third_timepoint', 'third_complete')]
+
+#remove participants that don't have 'Yes' in 'first_complete'
+df <-df[(df$first_complete == "Yes"),] #nrow = 88, which is correct
+
+#remove participants that don't have 'Yes' in 'second_complete'
+df <-df[(df$second_complete == "Yes"),] #nrow = 74, which is correct
+
+#remove redundant columns
+df <- subset(df, select=-c(first_complete, second_complete, third_timepoint))
+
+#rename column
+names(df)[names(df) == 'third_complete'] <- 'offlabel?'
+
+#write.csv
+write.csv(df, '../generated_csvs/participantList_table1_2018-08-08.csv', row.names=FALSE)
+
+```
+
