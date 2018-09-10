@@ -1,11 +1,14 @@
 ---
 title: "STOPPD_error"
 author: "Navona"
-date: "February 8, 2018"
-output: html_notebook
+output:
+  pdf_document: default
+  html_notebook: default
+last run: Sys.Date()
+written: February 8, 2018
 ---
 
-This script pulls together completion information alongside cortical thickness (CT) values and demographic information, for statistical purposes (error calculations). It is required for subsequent CT analyses.
+This script pulls together completion information alongside cortical thickness (CT) values and demographic information, for statistical purposes (error calculations). It is required for subsequent CT analyses. It was made in preparation for, and discussed at, the meeting with Jason Lerch. 
 
 ```{r setup}
 
@@ -15,97 +18,83 @@ library('dplyr')
 library('tidyr')
 library('stringr')
 
-df <- read.csv('../generated_csvs/STOPPD_masterDF_2018-01-18.csv') #clean spreadsheet created by nc
-df[ df == "" ] <- NA #turn blank space into proper NAs
+df <- read.csv('../generated_csvs/STOPPD_masterDF_2018-09-06.csv', na.strings = "", stringsAsFactors = FALSE) #spreadsheet created by 03_STOPPD_masterDF.rmd
 
-log <- read.csv('../data/master_log.csv') #from Judy
-
-CT <- read.csv('../data/CT_2018-02-08.csv')
+CT <- read.csv('../data/CT_2018-02-08.csv', stringsAsFactors = FALSE) #bring in CT data, from pipelines
 
 ```
 
-```{r datacleaning}
+```{r datacleaning_participants}
 
 #remove participants that did not complete first and second scan
+df <-df[!is.na(df$first_complete=="Yes"),] #remove participants with NA, first scan
+df <-df[!is.na(df$second_complete=="Yes"),] #remove participants with NA, second scan (74 participants)
 
-df$first_complete <- as.character(df$first_complete)
-df$second_complete <- as.character(df$second_complete)
-df <-df[!is.na(df$first_complete=="Yes"),]
-df <-df[!is.na(df$second_complete=="Yes"),]
-df <-df[!(df$second_complete=="No"),]
-
-#make a new column for offlabel
+#make a new column for offlabel ("a scan is by definition offlabel if it is the third scan"")
 df$offlabel <- ifelse(df$third_complete == "Yes", "Yes", '')
 
 #make a datediff column for time between scans
 df$dateDiff <- round(difftime(df$second_date, df$first_date, units = "days"), 0)
 
-#remove unnecessary columns
-df <- subset(df, select= c(STUDYID, randomization, second_timepoint, offlabel, dateDiff))
+#keep only necessary columns
+df <- subset(df, select= c(STUDYID, randomization, sex, age, second_timepoint, offlabel, dateDiff))
 
-#write out spreadsheet
-write.csv(df, '../generated_csvs/subject_info.csv', row.names = FALSE)
+```
+
+```{r datacleaning_CT}
 
 #clean up CT spreadsheet
-CT <- CT[!grepl("long", CT$SubjID),] #remove values with 'long'
-CT$SubjID <- substring(CT$SubjID, 12) #remove first 11 characters
-CT <- subset(CT, nchar(as.character(SubjID)) >= 7) #remove subject IDs with fewer than 6 characters
-CT <- CT[!grepl("_00", CT$SubjID),] #remove '_00' scans
-CT <- CT[!grepl("_03", CT$SubjID),] #remove '_03' scans
-CT$timepoint <- str_sub(CT$SubjID, -2, -1) #make timepoint characters own column 
-CT$SubjID <- str_sub(CT$SubjID, 1, -4) #remove last 3 characters
+  CT <- CT[!grepl("long", CT$SubjID),] #remove values with 'long'
+  CT$SubjID <- substring(CT$SubjID, 12) #make subject ID string consistent with elsewhere
+  CT <- subset(CT, nchar(as.character(SubjID)) >= 7) #remove subject IDs with fewer than 6 characters
+  CT <- CT[!grepl("_00", CT$SubjID),] #remove '_00' scans
+  CT <- CT[!grepl("_03", CT$SubjID),] #remove '_03' scans
+  CT$timepoint <- str_sub(CT$SubjID, -2, -1) #make timepoint characters own column 
+  CT$SubjID <- str_sub(CT$SubjID, 1, -4) #remove last 3 characters
 
 #move CT from long to wide format
-CT <- CT[!grepl("110034", CT$SubjID),] #remove duplicate entry for 110034 - follow up with this!
-CT_wide <- reshape(CT, idvar = "SubjID", timevar = "timepoint", direction = "wide")
+  CT_wide <- reshape(CT, idvar = "SubjID", timevar = "timepoint", direction = "wide")
 
 #merge CT values with df
-df$STUDYID <- as.character(df$STUDYID) #make character
-df <- merge(df, CT_wide, by.x='STUDYID', by.y = 'SubjID', all.x = TRUE)
-df <- df[!grepl("110034", df$STUDYID),] #remove missing entry for 110034 - follow up with this!
+  df <- merge(df, CT_wide, by.x='STUDYID', by.y = 'SubjID', all.x = TRUE)
 
-#merge sex and age info 
-df <- merge(df, log[c("STOPPD.clinical.Trial.ID.Imaging.ID", 'Sex', 'Age')], by.x = 'STUDYID', by.y = "STOPPD.clinical.Trial.ID.Imaging.ID", all.x=TRUE)
-
-#name certain columns
-colnames(df)[colnames(df)=="second_timepoint"] <- "category" 
-colnames(df)[colnames(df)=="offlabel"] <- "offLabel" 
+#name certain columns, for clarity
+  colnames(df)[colnames(df)=="second_timepoint"] <- "category" 
+  colnames(df)[colnames(df)=="offlabel"] <- "offLabel" 
 
 #write.csv
-write.csv(df, '../generated_csvs/STOPPD_errorCases_2018-02-09.csv', row.names = FALSE)
-
-#remove old dfs
-rm(CT_wide, log)
+  write.csv(df, '../generated_csvs/STOPPD_errorCases_2018-02-09.csv', row.names = FALSE)
 
 ```
 
-```{r controls}
+```{r datacleaning_controls}
 
 #make a separate dataframe for repeat control info
-controls_R <- CT[grepl("R", CT$SubjID),] #grab all the IDs with an R
-controls_R$R <- stri_sub(controls_R$SubjID, 1, 1) #make new column with repeat info
-controls_R$SubjID <- substring(controls_R$SubjID, 2) #remove the R from the ID
+  controls_R <- CT[grepl("R", CT$SubjID),] #grab all the IDs with an R
+  controls_R$R <- stri_sub(controls_R$SubjID, 1, 1) #make new column with repeat info
+  controls_R$SubjID <- substring(controls_R$SubjID, 2) #remove the R from the ID
 
 #make a separate dataframe with test-retest from controls 
-control_list <- controls_R[['SubjID']] #make a vector of subject iDs in controls$SubjID
-controls <- CT[CT$SubjID %in% control_list, ] #grab the SubjIDs in control_list from CT dataframe
-controls <- rbind.fill(controls_R, controls)
+  control_list <- controls_R[['SubjID']] #make a vector of subject iDs in controls$SubjID
+  controls <- CT[CT$SubjID %in% control_list, ] #grab the SubjIDs in control_list from CT dataframe
+  controls <- rbind.fill(controls_R, controls)
 
 #clean up
-controls$R <- ifelse(controls$R == "R", "02", '') #change R into 02
-controls$R[is.na(controls$R)] <- "01" #change NA into 01
-controls <- subset(controls, select= -c(timepoint))#remove timepoint column
+  controls$R <- ifelse(controls$R == "R", "02", '') #change R into 02
+  controls$R[is.na(controls$R)] <- "01" #change NA into 01
+  controls <- subset(controls, select= -c(timepoint))#remove timepoint column
 
 #move controls df from long to wide format
-controls <- reshape(controls, idvar = "SubjID", timevar = "R", direction = "wide")
+  controls <- reshape(controls, idvar = "SubjID", timevar = "R", direction = "wide")
 
 #name ID column
-colnames(controls)[colnames(controls)=="SubjID"] <- "STUDYID" 
+  colnames(controls)[colnames(controls)=="SubjID"] <- "STUDYID" 
 
 #write.csv
-write.csv(controls, '../generated_csvs/STOPPD_errorControls_2018-02-09.csv', row.names = FALSE)
+  write.csv(controls, '../generated_csvs/STOPPD_errorControls_2018-02-09.csv', row.names = FALSE)
+
+#cleanup
+  rm(CT_wide, CT, df, controls, controls_R, control_list)
 
 ```
-
-
 

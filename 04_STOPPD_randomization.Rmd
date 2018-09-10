@@ -1,13 +1,16 @@
 ---
-title: "STOPPD participant count by group "
-output: html_document
+title: 'STOPPD participant count by group '
+written: January 18, 2018  
+last updated: August 20, 2018
+last run: Sys.Date()
+output:
+  pdf_document: default
+  html_document: default
 ---
 
-written: January 18, 2018  
-last run: January 25, 2018  
+This script identifies the number of participants in olanzapine vs. placebo by scan timepoint, using the logic of group inclusion that Judy and Dielle provided, and Nick and Aristotle have agreed to.
 
-This script identifies the number of participants in olanzapine vs. placebo by scan timepoint, using the logic of group information that Judy and Dielle provided.    
-__Note:__ this script includes data from all participants with data in Judy's master log and our file system. It has not excluded participants on any other basis (e.g., pilot data, ineligibility, etc.)
+__Note:__ this script includes data from all participants with data in Judy's master log and our file system. It has not excluded participants on any other basis (e.g., QC fail, processing fail, post-hoc clinical trial ineligibility, etc.)
 
 
 ```{r setup, include=FALSE}
@@ -17,60 +20,69 @@ library('plyr')
 library('tidyr')
 library('stringr')
 
-df <- read.csv('../generated_csvs/STOPPD_masterDF_2018-01-18.csv') #clean spreadsheet created by nc
-df[ df == "" ] <- NA #turn blank space into proper NAs
+df <- read.csv('../generated_csvs/STOPPD_masterDF_2018-09-06.csv', na.strings = '', stringsAsFactors = FALSE) #created by 03_STOPPD_masterDF
 
 ```
 
-#First - identify the number of baseline scans (ie week 20) (as I understand it should be about 80).
+#First - identify the number of baseline scans (i.e., scans completed at week 20).
 
 ```{r FirstScan}
 
 #count the number of participants that have a 'yes' for 'completed' in "Scan.completed.1"
-sum(na.omit(df$first_complete == "Yes")) #88 completed week 20 scan
+sum(na.omit(df$first_complete == "Yes")) #88 participants completed week 20 scan
 
-#RANDOMIZATION 
+#for clarity, print the IDs of the N=88 participants that completed week 20 scans
+(as.vector(na.omit(df$STUDYID[df$first_complete == "Yes"])))
+
+#RANDOMIZATION - as expected, there's no difference in first scan completion between those randomized to O vs. P group
 (R <- addmargins(table(df$first_complete == 'Yes', df$randomization))) #O = 45; P = 43 (total = 88)
 
 ```
 
-We see that 88 participants completed the week 20 scan, O = 45; P = 43 
-
-#Second - identify the number of week 56 scans. (Ie 36 weeks after week 20).
+#Second - identify the number of week 56 scans (i.e., 36 weeks after week 20).
 
 ```{r SecondScan_RCT}
 
 #make sure that all the participants that completed week 56 scan also completed week 20
 (df$second_complete == "Yes") %in% (df$first_complete== "Yes") #all TRUE
 
-#count the number of participants that have a 'yes' for 'completed' in "Scan.completed" - but this includes 'relapse' and 'off protocol', as well as true completers
+#count the number of participants that have a 'yes' for 'completed' in "Scan.completed" - but this includes 'relapse' and 'off protocol', as well as RCT or "true completers"
 sum(na.omit(df$second_complete == "Yes")) #74 completed week 56 scan
 
-#count how many participants that completed week 56 scan are classified as RCT (ignore 'relapse' and 'off protocol' for now)
+#for clarity, print the IDs of the N=74 participants that completed week 56 scans
+(as.vector(na.omit(df$STUDYID[df$second_complete == "Yes"])))
+
+#count how many participants that completed week 56 scan are classified as RCT 
 sum(na.omit(df$second_complete == 'Yes' & df$second_timepoint == 'RCT')) #RCT = 41
+  (as.vector(na.omit(df$STUDYID[df$second_complete == "Yes" & df$second_timepoint == 'RCT']))) #for clarity, print N=41 RCT participant IDs
+sum(na.omit(df$second_complete == 'Yes' & df$second_timepoint == 'Relapse')) #Relapse = 28
+  (as.vector(na.omit(df$STUDYID[df$second_complete == "Yes" & df$second_timepoint == 'Relapse']))) #for clarity, print N=28 Relapse participant IDs
+sum(na.omit(df$second_complete == 'Yes' & df$second_timepoint == 'Off protocol')) #Off protocol = 5
+  (as.vector(na.omit(df$STUDYID[df$second_complete == "Yes" & df$second_timepoint == 'Off protocol']))) #for clarity, print N=5 Off protocol participant IDs
 
-#RANDOMIZATION 
+#RANDOMIZATION- look at randomization info for those who completed a second timepoint RCT scan
 (R <- addmargins(table(df$second_complete == 'Yes' & df$second_timepoint == 'RCT', df$randomization))) #O = 27; P = 14 (total = 41)
-
 
 ```
 
-We see that 41 participants completed the week 56 scan, O = 27; P = 14
-
-
-#Third - identify the number of "off label" scans also at week 56 (should only be a small handful).
+#Third - identify the number of "off label" scans also at week 56.
 
 ```{r ThirdScan_OffLabel}
 
 #make sure timepoint is a character
 df$second_timepoint <- as.character(df$second_timepoint)
 
-#count number of scans completed at *third* timepoint, which are by definition "off label"
+#count the number of scans completed at *third* timepoint, which are by definition "off label"
 sum(na.omit(df$third_complete == 'Yes')) #8 off-label scans
+
+#for clarity, print the IDs of the N=8 participants that completed off-label scans
+(as.vector(na.omit(df$STUDYID[df$third_complete == "Yes"])))
 
 #of these, determine how many "off protocol" vs. "relapse", based on second timepoint scan
 sum(na.omit(df$third_complete == 'Yes' & df$second_timepoint  == 'Off protocol')) #2 "off protocol" scans
+  (as.vector(na.omit(df$STUDYID[df$third_complete == "Yes" & df$second_timepoint  == 'Off protocol'])))
 sum(na.omit(df$third_complete == 'Yes' & df$second_timepoint == 'Relapse')) #6 relapse scans
+  (as.vector(na.omit(df$STUDYID[df$third_complete == "Yes" & df$second_timepoint  == 'Relapse'])))
 
 #RANDOMIZATION 
 (R <- addmargins(table(df$third_complete == 'Yes', df$randomization))) #Off label: O = 3; P = 5 (total = 8)
@@ -79,10 +91,7 @@ sum(na.omit(df$third_complete == 'Yes' & df$second_timepoint == 'Relapse')) #6 r
 
 ```
 
-We see that 8 participants completed "off label" scans at week 56 scan, O = 3; P = 5.  Of these, 2 were "off protocol", O = 2; P = 0, and 6 were "relapse", O = 1; P = 5
-
-
-#Then using our master log identify scans completed between week 20 and week 56 which are the relapse scans (and in a small minority of cases may be a scan when somebody is moving or wants out of the study despite being well). 
+#Identify the scans completed between week 20 and week 56 which are the relapse scans (and in a small minority of cases may be a scan when somebody is moving or wants out of the study despite being well). 
 
 ```{r SecondScan_Relapse}
 
@@ -98,7 +107,6 @@ sum(na.omit(df$second_timepoint == 'Off protocol' & df$second_complete == 'Yes')
 (R <- addmargins(table(df$second_timepoint == 'Relapse' & df$second_complete == 'Yes', df$randomization))) #relapse: O = 8; P = 20 (total = 28)
 (R <- addmargins(table(df$second_timepoint == 'Off protocol' & df$second_complete == 'Yes', df$randomization))) #relapse: O = 4; P = 1 (total = 5)
 
+rm(df, R)
+
 ```
-
-We see that 33 participants completed a relapse scan, O = 12; P = 21. Of these, 28 were "relapse", O = 8; P = 20, and 5 were "off protocol", O = 4; P = 1.
-

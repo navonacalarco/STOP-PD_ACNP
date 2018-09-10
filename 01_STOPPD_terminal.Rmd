@@ -1,14 +1,16 @@
 ---
-title: "STOPPD_terminal"
+title: "01_STOPPD_terminal"
 author: "Navona"
-date: "January 18, 2018"
+written: January 18, 2018  
+last run: Sys.Date()
 output: html_document
 ---
 
-#This script cleans up the naming of STOPPD scans as they exist in the file system.
+#This script pulls in and cleans up the naming of STOPPD scans as they exist in the Kimel lab file system. At earlier stages, this script helped us identify naming errors in the file system (all have since been fixed).
 
-```{r setup, include=FALSE}
+#Purpose: The contents of the file system will, in other scripts, be checked against (1) the scans we have in XNAT, to ensure that there are no discrepancies between these databases, and also against (2) our subject inclusion list.
 
+```{r setup}
 library('stringi')
 library('stringr')
 library('plyr')
@@ -18,17 +20,11 @@ library('tidyr')
 ```{r import_data}
 
 #import spreadsheet ('ls' of file system)
-terminal <- read.csv('../data/stoppd_NiiFolderContents_2018-01-25.csv', header = TRUE)
+terminal <- read.csv('../data/stoppd_NiiFolderContents_2018-01-25.csv', header = TRUE, stringsAsFactors = FALSE)
 
 ```
 
 ```{r data_cleaning}
-
-#make scan ID character string
-terminal$scan_id <- as.character(terminal$scan_id)
-
-#fix scan ID for STOPPD02_MAS_210030_02
-#terminal$scan_id[terminal$scan_id == 'STOPPD02_MAS_210030_02'] <- 'STOPPD_MAS_210030_02' #fixed
 
 #make a new column for site component of ID
 terminal$site <- str_sub(terminal$scan_id, 8, 10)
@@ -38,7 +34,6 @@ terminal$scan_id <- substring(terminal$scan_id, 12)
 
 #make a new column for session component of ID
 terminal$session <- str_sub(terminal$scan_id, -2)
-table(terminal$session)
 
 #cut out session information from ID (last 3 characters)
 terminal$scan_id <- stri_sub(terminal$scan_id, 1, -4)
@@ -49,16 +44,10 @@ terminal$contains_R <- grepl('R', terminal$scan_id, fixed=TRUE) #36 participants
 #cut out the 'R' in some participant IDs (indicates repeat for controls)
 terminal$scan_id <- gsub("[R]", "", terminal$scan_id)
 
-#fix incorrect CAMH scan IDs
-#terminal$scan_id[terminal$scan_id == '24S024'] <- "410031"
-#terminal$scan_id[terminal$scan_id == '24S025'] <- "420032"
-#terminal$scan_id[terminal$scan_id == '24S027'] <- "420039"
-#terminal$scan_id[terminal$scan_id == '420008'] <- '410008' #fixed
-
 #make a 'group' column to capture case vs. control information
 terminal$group <- stri_sub(terminal$scan_id, 2, 2) #note: 1 or 2 is patient, 6 is control
 
-#change numbers in 'group' column to labels for clarity
+#for clarity, change values in 'group' column to labels for clarity
 terminal$group[terminal$group == 1] <- "patient"
 terminal$group[terminal$group == 2] <- "patient"
 terminal$group[terminal$group == 6] <- "control"
@@ -68,5 +57,8 @@ terminal$id_session <- paste(terminal$scan_id, '_', terminal$session, sep='')
 
 #write csv
 write.csv(terminal, '../generated_csvs/terminal_clean_2018-01-25.csv', row.names=FALSE)
+
+#cleanup
+rm(terminal)
 
 ```
